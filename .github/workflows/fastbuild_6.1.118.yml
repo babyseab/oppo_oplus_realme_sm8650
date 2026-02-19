@@ -516,7 +516,9 @@ jobs:
             echo "CONFIG_RCU_NOCB_CPU_DEFAULT_ALL=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_RCU_LAZY=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_RCU_LAZY_DEFAULT_OFF=n" >> ./common/arch/arm64/configs/gki_defconfig
-            echo 'CONFIG_CMDLINE="rcupdate.rcu_normal_after_boot=1"' >> ./common/arch/arm64/configs/gki_defconfig
+            echo "RCU_NORMAL_AFTER_BOOT_ENABLE=1" >> $GITHUB_ENV
+          else
+            echo "RCU_NORMAL_AFTER_BOOT_ENABLE=0" >> $GITHUB_ENV
           fi
           if [[ "${{ github.event.inputs.wq_power_efficient_enable }}" == "true" ]]; then
             echo "CONFIG_WQ_POWER_EFFICIENT_DEFAULT=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -897,6 +899,22 @@ jobs:
           git clone https://github.com/cctv18/AnyKernel3 --depth=1
           rm -rf ./AnyKernel3/.git
           cd AnyKernel3
+          if [[ "${RCU_NORMAL_AFTER_BOOT_ENABLE}" == "1" ]]; then
+            echo "Lazy RCU enabled, patching cmdline: rcupdate.rcu_normal_after_boot=1"
+            awk '
+              /split_boot # for devices with init_boot ramdisk/ {
+                print;
+                print "    patch_cmdline \"rcupdate.rcu_normal_after_boot\" \"rcupdate.rcu_normal_after_boot=1\"";
+                next
+              }
+              /dump_boot # use split_boot to skip ramdisk unpack, e.g. for devices with init_boot ramdisk/ {
+                print;
+                print "    patch_cmdline \"rcupdate.rcu_normal_after_boot\" \"rcupdate.rcu_normal_after_boot=1\"";
+                next
+              }
+              { print }
+            ' ./anykernel.sh > ./anykernel.sh.tmp && mv ./anykernel.sh.tmp ./anykernel.sh
+          fi
           cp ../common/out/arch/arm64/boot/Image ./Image
           if [[ ! -f ./Image ]]; then
             echo "未找到内核镜像文件，构建可能出错"
